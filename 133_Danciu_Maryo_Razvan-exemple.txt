@@ -1,0 +1,99 @@
+--1
+--Sa se afiseze numele jobului, numele departamentului si numele de familie al angajatilor care lucreaza in orasul Galati. 
+--Sa se afiseze raspsurile intr-o singura propozitie
+
+
+select unique concat(concat(concat(concat(concat('Angajatul ', last_name), ' cu jobul '), job_title), ' lucreaza in departamentul '), dep_name) 
+ as "Descriere_angajati"
+ from jobs j, departamente d, angajati a, locatii l
+ where j.job_id = a.job_id and d.dep_id = a.dep_id and a.location_id = l.location_id and lower(l.city) like 'gal%';
+
+--2.	Sa se afiseze cainii cu varsta peste varsta medie a tutror cainilor.
+with medie_varsta(medie) as
+(select avg(age) from caini)
+select *
+from caini c, medie_varsta mv
+where c.age > mv.medie;
+
+--3.	Sa se afiseze in ordine cronologica, id-ul, numele, data la care a fost luat in grija si cate luni au trecut
+-- de la data respective pana la ultima zi din luna in care a fost luat in grija cel mai longeviv 
+--caine din locatiile unde se afla jucarii spre vanzare.
+
+select dog_id, name, join_date,
+ months_between(
+ join_date,
+ last_day((select min(join_date) from
+ caini c, locatii l, produs p, produse po
+ where c.location_id = l.location_id and 
+ l.location_id = p.location_id and
+ po.group_id = p.group_id
+ and lower(po.prods_name) like 'jucarii'))
+ ) as "dif"
+ from caini
+ order by join_date;
+ 
+ --4.	Sa se afiseze id-ul si locatia produselor mai ieftine decat lotiune pentru ochi din Bucuresti.
+--De asemenea sa se afiseze “DA” daca culoarea produselor este roise si “NU” in caz contrar.
+
+ select prod_id, p.location_id, decode(p.color, 'rosu', 'DA', 'NU') as "rezultat"
+from produs p, produse pr, locatii l
+where p.group_id = pr.group_id and 
+      pr.pret < (select pret from produse where lower(prods_name) like '%ochi%')
+      and lower(l.city) like '%bucu%';
+      
+--5.	Pentru fiecare locatie, sa se afiseze cate produse nu au culoare.
+-- Sa se spuna si daca numarul total de produse depaseste 130.
+
+select p.location_id, city, count(*),
+case
+when (nvl(city, null)) is null then 'Peste 130 de produse'
+else 'Sub 130 de produse'
+end as "Numar Produse"
+from produs p, locatii l
+where nvl(color, NULL) is null and p.location_id = l.location_id
+group by p.location_id, city
+order by p.location_id;
+
+
+
+------------------------ACTUALIZARI/SUPRIMARI----------
+
+--1.	Pretul tuturor produselor de la firma Trixie devine 30.
+update produse
+set pret = 30
+where brand_name = (select brand_name from produse where lower(brand_name) like '%trixie%' group by brand_name);
+select * from produse;
+
+
+--2.	Produsul vandut de cele mai multe ori primeste o reducere de 10 la suta.
+update produse
+set pret = pret - pret * 0.1
+where group_id = (select group_id
+from tranzactii
+having count(*) = (select max(count(*)) from tranzactii group by group_id)
+group by group_id);
+
+-- 3.	S-a produs o greseala si ultima adoptie a fost inregistrata cu o zi mai devreme decat trebuia. Sa se corecteze greseala.
+update adoptii
+set adoption_date = adoption_date + 1
+where adoption_date = (select max(adoption_date)
+from adoptii);
+
+--4. Cainii cu varsta mai mare decat media varstelor tuturor cainilor sunt stersi.
+delete from caini
+where age >= (select avg(age) from caini);
+
+--5, Se sterge prima tranzactie din anul 2016.
+delete from tranzactii
+where purchase_date = (
+select min(purchase_date)
+from tranzactii
+where purchase_date > to_date('01.01.2016','DD.MM.YYYY')
+);
+
+
+--6.	Se sterg clientii care au efectuat tranzactii in anul 2017.
+delete from clienti
+where cl_id in (select cl_id from tranzactii where purchase_date > to_date('01.01.2017','DD.MM.YYYY')
+and purchase_date < to_date('01.01.2018','DD.MM.YYYY'));
+
